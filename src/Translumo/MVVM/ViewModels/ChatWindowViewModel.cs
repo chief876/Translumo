@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -114,8 +116,38 @@ namespace Translumo.MVVM.ViewModels
             }
         }
 
-        private void HotKeysManagerOnOnceTranslateKeyPressed(object sender, EventArgs e)
+        private Form FreezeScreen()
         {
+            var bmpScreenshot = new Bitmap(Screen.PrimaryScreen.Bounds.Width,
+                                           Screen.PrimaryScreen.Bounds.Height);
+
+            var gfxScreenshot = Graphics.FromImage(bmpScreenshot);
+
+            gfxScreenshot.CopyFromScreen(Screen.PrimaryScreen.Bounds.X,
+                                         Screen.PrimaryScreen.Bounds.Y,
+                                         0,
+                                         0,
+                                         Screen.PrimaryScreen.Bounds.Size,
+                                         CopyPixelOperation.SourceCopy);
+
+            var screenshotForm = new Form();
+            screenshotForm.FormBorderStyle = FormBorderStyle.None;
+            screenshotForm.WindowState = FormWindowState.Maximized;
+            screenshotForm.TopMost = true;
+
+            var pb = new PictureBox();
+            pb.Dock = DockStyle.Fill;
+            pb.Image = bmpScreenshot;
+            screenshotForm.Controls.Add(pb);
+
+            return screenshotForm;
+        }
+
+        private async void HotKeysManagerOnOnceTranslateKeyPressed(object sender, EventArgs e)
+        {
+            var freezeForm = FreezeScreen();
+            freezeForm.Show();
+
             if (_dialogService.WindowIsOpened<SettingsViewModel>())
             {
                 Model.AddChatItem(LocalizationManager.GetValue("Str.Chat.SettingsOpened"), TextTypes.Info);
@@ -128,6 +160,16 @@ namespace Translumo.MVVM.ViewModels
             {
                 Model.OnceTranslation(window.SelectedArea);
             }
+
+            await Task.Run(async () =>
+            {
+                await Task.Delay(500); // Задержка в 0.5 секунды в фоновом потоке
+                freezeForm.BeginInvoke(new Action(() =>
+                {
+                    freezeForm.Hide(); // Скрыть форму
+                    freezeForm.Close(); // Закрыть форму
+                }));
+            });
         }
 
         private void HotKeysManagerOnWindowStyleChangeKeyPressed(object sender, EventArgs e)
